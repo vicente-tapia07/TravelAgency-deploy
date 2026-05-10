@@ -1,0 +1,121 @@
+services:
+
+  # Base de datos MySQL
+  mysql:
+    image: mysql:8.0
+    container_name: travelagency-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root1234
+      MYSQL_DATABASE: travelagency
+      MYSQL_USER: traveluser
+      MYSQL_PASSWORD: travel1234
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - travelagency-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Keycloak para autenticación
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.1.4
+    container_name: travelagency-keycloak
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin2026
+    command: start-dev --import-realm
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+      - ./realm-export:/opt/keycloak/data/import
+    ports:
+      - "9090:8080"
+    networks:
+      - travelagency-network
+
+  # Backend Spring Boot - Réplica 1
+  backend1:
+    image: vicentetapia07/travelagency-backend:latest
+    container_name: travelagency-backend1
+    environment:
+      DB_USER: traveluser
+      DB_PASSWORD: travel1234
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/travelagency
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://localhost:9090/realms/travelagency-realm
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/travelagency-realm/protocol/openid-connect/certs
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - travelagency-network
+
+  # Backend Spring Boot - Réplica 2
+  backend2:
+    image: vicentetapia07/travelagency-backend:latest
+    container_name: travelagency-backend2
+    environment:
+      DB_USER: traveluser
+      DB_PASSWORD: travel1234
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/travelagency
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://localhost:9090/realms/travelagency-realm
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/travelagency-realm/protocol/openid-connect/certs
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - travelagency-network
+
+  # Backend Spring Boot - Réplica 3
+  backend3:
+    image: vicentetapia07/travelagency-backend:latest
+    container_name: travelagency-backend3
+    environment:
+      DB_USER: traveluser
+      DB_PASSWORD: travel1234
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/travelagency
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://localhost:9090/realms/travelagency-realm
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/travelagency-realm/protocol/openid-connect/certs
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - travelagency-network
+
+  # Nginx como balanceador de carga para el backend
+  nginx-backend:
+    image: nginx:alpine
+    container_name: travelagency-nginx-backend
+    volumes:
+      - ./nginx-backend.conf:/etc/nginx/conf.d/default.conf
+    ports:
+      - "8090:80"
+    depends_on:
+      - backend1
+      - backend2
+      - backend3
+    networks:
+      - travelagency-network
+
+  # Frontend React + Nginx
+  frontend:
+    image: vicentetapia07/travelagency-frontend:latest
+    container_name: travelagency-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - nginx-backend
+    networks:
+      - travelagency-network
+
+networks:
+  travelagency-network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+  keycloak_data:

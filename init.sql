@@ -1,6 +1,3 @@
-CREATE DATABASE IF NOT EXISTS travelagency;
-USE travelagency;
-
 CREATE TABLE IF NOT EXISTS user (
     id            BIGINT AUTO_INCREMENT PRIMARY KEY,
     full_name     VARCHAR(100) NOT NULL,
